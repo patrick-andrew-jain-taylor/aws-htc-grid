@@ -50,7 +50,6 @@ def evaluate_american_option(input_dict):
         tree = input_dict["engineParameters"]["tree"]
         option.setPricingEngine(ql.BinomialVanillaEngine(process, tree, timeSteps))
     else:
-        raise Exception("Unimplemented engineName [{}]".format(input_dict["engineName"]))
+        raise Exception(f'Unimplemented engineName [{input_dict["engineName"]}]')
 
-    value = option.NPV()
-    return value
+    return option.NPV()

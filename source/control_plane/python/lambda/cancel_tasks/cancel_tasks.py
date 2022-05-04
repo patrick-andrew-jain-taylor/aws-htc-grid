@@ -47,12 +47,16 @@ def cancel_tasks_by_status(session_id, task_state):
             state_table.update_task_status_to_cancelled(row['task_id'])
 
     except StateTableException as e:
-        errlog.log("StateTableException error in setting task's status to cancelled {} [{}]".format(
-                e, traceback.format_exc()))
+        errlog.log(
+            f"StateTableException error in setting task's status to cancelled {e} [{traceback.format_exc()}]"
+        )
+
         raise e
     except Exception as e:
-        errlog.log("Unexpected error in in setting task's status to cancelled {} [{}]".format(
-                e, traceback.format_exc()))
+        errlog.log(
+            f"Unexpected error in in setting task's status to cancelled {e} [{traceback.format_exc()}]"
+        )
+
         raise e
 
     return response['Items']
@@ -75,10 +79,9 @@ def cancel_session(session_id):
     all_cancelled_tasks = []
     for state in task_states_to_cancel:
         res = cancel_tasks_by_status(session_id, state)
-        print("Cancelling session: {} status: {} result: {}".format(
-            session_id, state, res))
+        print(f"Cancelling session: {session_id} status: {state} result: {res}")
 
-        lambda_response["cancelled_{}".format(state)] = len(res)
+        lambda_response[f"cancelled_{state}"] = len(res)
 
         all_cancelled_tasks += res
 
@@ -132,8 +135,5 @@ def lambda_handler(event, context):
         }
 
     except Exception as e:
-        errlog.log('Lambda cancel_tasks error: {} trace: {}'.format(e, traceback.format_exc()))
-        return {
-            'statusCode': 542,
-            'body': "{}".format(e)
-        }
+        errlog.log(f'Lambda cancel_tasks error: {e} trace: {traceback.format_exc()}')
+        return {'statusCode': 542, 'body': f"{e}"}

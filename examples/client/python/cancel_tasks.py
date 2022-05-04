@@ -62,7 +62,7 @@ if __name__ == "__main__":
         }
 
         # Submit 10 tasks
-        submission_resp = gridConnector.send([task_definition for x in range(0, 10)])
+        submission_resp = gridConnector.send([task_definition for _ in range(10)])
         print(submission_resp)
 
         # Wait for some tasks to be completed

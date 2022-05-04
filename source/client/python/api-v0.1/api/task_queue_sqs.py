@@ -146,5 +146,4 @@ class QueueSQS:
         return None
 
     def get_queue_length(self) -> int:
-        queue_length = int(self.sqs_queue.attributes.get("ApproximateNumberOfMessages"))
-        return queue_length
+        return int(self.sqs_queue.attributes.get("ApproximateNumberOfMessages"))

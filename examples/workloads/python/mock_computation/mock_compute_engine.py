@@ -5,7 +5,7 @@
 import time
 
 def lambda_handler(event, context):
-    message = 'Hellrint(args[0]) {}!'.format(event)
+    message = f'Hellrint(args[0]) {event}!'
     args = event['worker_arguments']
     time.sleep(int(args[0])/1000)
     return int(args[0])

@@ -81,10 +81,9 @@ def evaluate_european_option(input_dict):
             )
 
         else:
-            raise Exception("Unimplemented engineName [{}]".format(input_dict["engineName"]))
+            raise Exception(f'Unimplemented engineName [{input_dict["engineName"]}]')
 
     else:
-        raise Exception("Unimplemented engineName [{}]".format(input_dict["engineName"]))
+        raise Exception(f'Unimplemented engineName [{input_dict["engineName"]}]')
 
-    value = option.NPV()
-    return value
+    return option.NPV()

@@ -74,7 +74,7 @@ def lambda_handler(event, context):
         event_counter.increment("counter_tasks_queue_size", queue.get_queue_length())
 
         for item in expired_tasks:
-            print("Processing expired task: {}".format(item))
+            print(f"Processing expired task: {item}")
             task_id = item.get('task_id')
             owner_id = item.get('task_owner')
             current_heartbeat_timestamp = item.get('heartbeat_expiration_timestamp')
@@ -89,12 +89,15 @@ def lambda_handler(event, context):
 
                 # retreive current number of retries and task message handler
                 retries, task_handler_id, task_priority = retreive_retries_and_task_handler_and_priority(task_id)
-                print("Number of retires for task[{}]: {} Priority: {}".format(task_id, retries, task_priority))
-                print("Last owner for task [{}]: {}".format(task_id, owner_id))
+                print(
+                    f"Number of retires for task[{task_id}]: {retries} Priority: {task_priority}"
+                )
+
+                print(f"Last owner for task [{task_id}]: {owner_id}")
 
                 # TODO: MAX_RETRIES should be extracted from task definition... Store in DDB?
                 if retries == MAX_RETRIES:
-                    print("Failing task {} after {} retries".format(task_id, retries))
+                    print(f"Failing task {task_id} after {retries} retries")
                     event_counter.increment("counter_failed_tasks")
                     fail_task(task_id, task_handler_id, task_priority)
                     continue
@@ -106,28 +109,28 @@ def lambda_handler(event, context):
                 try:
                     # Task can be acquired by an agent from this point
                     reset_task_msg_vto(task_handler_id, task_priority)
-                    print("SUCCESS FIX for {}".format(task_id))
+                    print(f"SUCCESS FIX for {task_id}")
 
                 except ClientError:
 
                     try:
-                        errlog.log('Failed to reset VTO trying to delete: {} '.format(task_id))
+                        errlog.log(f'Failed to reset VTO trying to delete: {task_id} ')
                         delete_message_from_queue(task_handler_id)
                     except ClientError:
-                        errlog.log('Inconsistent task: {} sending do DLQ'.format(task_id))
+                        errlog.log(f'Inconsistent task: {task_id} sending do DLQ')
                         event_counter.increment("counter_inconsistent_state")
                         set_task_inconsistent(task_id)
                         send_to_dlq(item)
 
             except ClientError as e:
-                errlog.log('Lambda ttl error: {}'.format(e.response['Error']['Message']))
-                print("Cannot process task {} : {}".format(task_id, e))
-                print("Sending task {} to DLQ...".format(task_id))
+                errlog.log(f"Lambda ttl error: {e.response['Error']['Message']}")
+                print(f"Cannot process task {task_id} : {e}")
+                print(f"Sending task {task_id} to DLQ...")
                 send_to_dlq(item)
             except Exception as e:
-                print("Cannot process task {} : {}".format(task_id, e))
-                print("Sending task {} to DLQ...".format(task_id))
-                errlog.log('Lambda ttl error: {}'.format(e))
+                print(f"Cannot process task {task_id} : {e}")
+                print(f"Sending task {task_id} to DLQ...")
+                errlog.log(f'Lambda ttl error: {e}')
                 send_to_dlq(item)
 
     stats_obj['02_completion_tstmp'] = {"label": "ttl_execution_time", "tstmp": int(round(time.time() * 1000))}
@@ -156,13 +159,13 @@ def fail_task(task_id, task_handler_id, task_priority):
 
     """
     try:
-      delete_message_from_queue(task_handler_id, task_priority)
+        delete_message_from_queue(task_handler_id, task_priority)
 
-      state_table.update_task_status_to_failed(task_id)
+        state_table.update_task_status_to_failed(task_id)
 
     except ClientError as e:
-      errlog.log("Cannot fail task {} : {}".format(task_id, e))
-      raise e
+        errlog.log(f"Cannot fail task {task_id} : {e}")
+        raise e
 
 
 def set_task_inconsistent(task_id):
@@ -183,7 +186,7 @@ def set_task_inconsistent(task_id):
         state_table.update_task_status_to_inconsistent(task_id)
 
     except ClientError as e:
-        errlog.log("Cannot set task to inconsistent {} : {}".format(task_id, e))
+        errlog.log(f"Cannot set task to inconsistent {task_id} : {e}")
         raise e
 
 
@@ -205,7 +208,7 @@ def delete_message_from_queue(task_handler_id, task_priority):
     try:
         queue.delete_message(task_handler_id, task_priority)
     except ClientError as e:
-        errlog.log("Cannot delete message {} : {}".format(task_handler_id, e))
+        errlog.log(f"Cannot delete message {task_handler_id} : {e}")
         raise e
 
 
@@ -236,7 +239,7 @@ def retreive_retries_and_task_handler_and_priority(task_id):
                resp_task.get('task_priority')
 
     except ClientError as e:
-        errlog.log("Cannot retreive retries and handler for task {} : {}".format(task_id, e))
+        errlog.log(f"Cannot retreive retries and handler for task {task_id} : {e}")
         raise e
 
 
@@ -255,7 +258,7 @@ def reset_task_msg_vto(handler_id, task_priority):
         queue.change_visibility(handler_id, visibility_timeout_sec, task_priority)
 
     except ClientError as e:
-        errlog.log("Cannot reset VTO for message {} : {}".format(handler_id, e))
+        errlog.log(f"Cannot reset VTO for message {handler_id} : {e}")
         raise e
 
 

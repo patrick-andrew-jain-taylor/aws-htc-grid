@@ -227,7 +227,7 @@ class StateTableDDB:
                 Limit=self.RETRIEVE_EXPIRED_TASKS_LIMIT
             )
 
-            print("Partition: {} expired tasks: {}".format(state_partition, response['Items']))
+            print(f"Partition: {state_partition} expired tasks: {response['Items']}")
 
             return response['Items']
 
@@ -322,8 +322,6 @@ class StateTableDDB:
 
         session_id = self.__get_session_id_from_task_id(task_id)
 
-        claim_is_successful = True
-
         try:
 
             self.state_table.update_item(
@@ -372,7 +370,7 @@ class StateTableDDB:
             logging.error(msg)
             raise e
 
-        return claim_is_successful
+        return True
 
     def refresh_ttl_for_ongoing_task(self, task_id, agent_id, new_expirtaion_timestamp):
         """
@@ -399,7 +397,6 @@ class StateTableDDB:
 
         session_id = self.__get_session_id_from_task_id(task_id)
 
-        refresh_is_successful = True
         try:
             self.state_table.update_item(
                 Key={
@@ -440,7 +437,7 @@ class StateTableDDB:
             logging.error(msg)
             raise e
 
-        return refresh_is_successful
+        return True
 
     def update_task_status_to_finished(self, task_id, agent_id):
         """
@@ -460,8 +457,6 @@ class StateTableDDB:
         """
 
         session_id = self.__get_session_id_from_task_id(task_id)
-
-        update_succesfull = True
 
         try:
 
@@ -509,7 +504,7 @@ class StateTableDDB:
             logging.error(msg)
             raise e
 
-        return update_succesfull
+        return True
 
     # ---------------------------------------------------------------------------------------------
     # Methods used by Submit Tasks Lambda ---------------------------------------------------------
@@ -567,18 +562,20 @@ class StateTableDDB:
             return combined_response
 
         except ClientError as e:
+            msg = f"Could not read tasks for session status [{session_id}] by key expression from Status Table. Exception: {e}"
             if e.response['Error']['Code'] in ["ThrottlingException", "ProvisionedThroughputExceededException"]:
-                msg = f"Could not read tasks for session status [{session_id}] by key expression from Status Table. Exception: {e}"
                 logging.warning(msg)
                 raise StateTableException(e, msg, caused_by_throttling=True)
 
             else:
-                msg = f"Could not read tasks for session status [{session_id}] by key expression from Status Table. Exception: {e}"
                 logging.warning(msg)
                 raise Exception(e)
 
         except Exception as e:
-            logging.error("Could not read tasks for session status [{}] by key expression from Status Table. Exception: {}".format(session_id, e))
+            logging.error(
+                f"Could not read tasks for session status [{session_id}] by key expression from Status Table. Exception: {e}"
+            )
+
             raise e
 
     # ---------------------------------------------------------------------------------------------
@@ -594,10 +591,9 @@ class StateTableDDB:
         return task_id.split("_")[0]
 
     def __get_state_partition_from_session_id(self, session_id):
-        r = self.__get_state_partition_at_index(
+        return self.__get_state_partition_at_index(
             int(hashlib.md5(session_id.encode()).hexdigest(), 16)
         )
-        return r
 
     def __get_state_partition_at_index(self, index):
         return index % self.MAX_STATE_PARTITIONS
@@ -610,19 +606,13 @@ class StateTableDDB:
 
     def __make_task_state_from_session_id(self, task_state, session_id):
 
-        res = self.__make_task_state_from_state_and_partition(
-            task_state,
-            self.__get_state_partition_from_session_id(session_id)
+        return self.__make_task_state_from_state_and_partition(
+            task_state, self.__get_state_partition_from_session_id(session_id)
         )
-
-        return res
 
     def __make_task_state_from_state_and_partition(self, task_state, partition_id):
-        res = "{}{}".format(
-            task_state,
-            partition_id
-        )
-        logging.info("PARTITION: {}".format(res))
+        res = f"{task_state}{partition_id}"
+        logging.info(f"PARTITION: {res}")
 
         return res
 
@@ -643,9 +633,10 @@ class StateTableDDB:
             Exception for all other errors
         """
         if new_task_state not in [TASK_STATE_FAILED, TASK_STATE_INCONSISTENT, TASK_STATE_CANCELLED]:
-            logging.error("__finalize_tasks_state called with incorrect input: {}".format(
-                new_task_state
-            ))
+            logging.error(
+                f"__finalize_tasks_state called with incorrect input: {new_task_state}"
+            )
+
 
         try:
 

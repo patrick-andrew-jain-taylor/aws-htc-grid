@@ -152,7 +152,7 @@ class InOutS3:
 
     def __get_full_key(self, key, postfix):
         if self.subnamespace is not None:
-            return str(self.subnamespace) + '/' + str(key) + str(postfix)
+            return f'{str(self.subnamespace)}/{str(key)}{str(postfix)}'
         else:
             return str(key) + str(postfix)
 
@@ -163,12 +163,8 @@ class InOutS3:
             # no renaming by default
             full_new_key = ''
             if new_subnamespace is not None:
-                full_new_key += str(new_subnamespace) + '/'
-            if new_key is not None:
-                full_new_key += str(new_key)
-            else:
-                full_new_key += str(key)
-
+                full_new_key += f'{str(new_subnamespace)}/'
+            full_new_key += str(new_key) if new_key is not None else str(key)
             print(full_new_key)
             print(copy_source)
             target_bucket = self.s3.Bucket(new_namespace)

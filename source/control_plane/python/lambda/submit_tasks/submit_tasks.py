@@ -88,7 +88,7 @@ def write_to_sqs(sqs_batch_entries, session_priority=0):
             # Should also send to DLQ
             raise Exception('Batch write to SQS failed - check DLQ')
     except Exception as e:
-        print("{}".format(e))
+        print(f"{e}")
         raise
 
     return response
@@ -125,8 +125,9 @@ def verify_passed_sessionid_is_unique(session_id):
     )
 
     if len(response['Items']) > 0:
-        raise Exception("Passed session id [{}] already in DDB, uuid is not unique!".format(
-            session_id))
+        raise Exception(
+            f"Passed session id [{session_id}] already in DDB, uuid is not unique!"
+        )
 
 
 def lambda_handler(event, context):
@@ -152,13 +153,10 @@ def lambda_handler(event, context):
             encoded_json_tasks = all_params.get('submission_content')
         if encoded_json_tasks is None:
             raise Exception('Invalid submission format, expect submission_content parameter')
-        decoded_json_tasks = base64.urlsafe_b64decode(encoded_json_tasks).decode('utf-8')
-        event = json.loads(decoded_json_tasks)
     else:
         encoded_json_tasks = event['body']
-        decoded_json_tasks = base64.urlsafe_b64decode(encoded_json_tasks).decode('utf-8')
-        event = json.loads(decoded_json_tasks)
-
+    decoded_json_tasks = base64.urlsafe_b64decode(encoded_json_tasks).decode('utf-8')
+    event = json.loads(decoded_json_tasks)
     try:
         invocation_tstmp = get_time_now_ms()
 
@@ -192,10 +190,10 @@ def lambda_handler(event, context):
 
 
         state_table_entries = []
+        task_definition = "none"
+
         for task_id in tasks_list:
             time_now_ms = get_time_now_ms()
-            task_definition = "none"
-
             task_json = {
                 'session_id': session_id,
                 'task_id': task_id,
@@ -249,13 +247,16 @@ def lambda_handler(event, context):
 
         event_counter.increment("count_ddb_batch_backoffs", backoff_count)
 
-        if len(ddb_batch_write_times) > 0:
+        if ddb_batch_write_times:
             event_counter.increment("count_ddb_batch_write_max", max(ddb_batch_write_times))
             event_counter.increment("count_ddb_batch_write_min", min(ddb_batch_write_times))
             event_counter.increment("count_ddb_batch_write_avg",
                                     sum(ddb_batch_write_times) * 1.0 / len(ddb_batch_write_times))
 
-        print("BKF: [{}] LEN: {} LIST: {}".format(backoff_count, len(ddb_batch_write_times), ddb_batch_write_times))
+        print(
+            f"BKF: [{backoff_count}] LEN: {len(ddb_batch_write_times)} LIST: {ddb_batch_write_times}"
+        )
+
 
         perf_tracker.add_metric_sample(
             last_submitted_task_ref['stats'],
@@ -275,8 +276,10 @@ def lambda_handler(event, context):
             'body': json.dumps(lambda_response)
         }
     except ClientError as e:
-        errlog.log("ClientError in Submit Tasks {} {}"
-                   .format(e.response['Error']['Code'], traceback.format_exc()))
+        errlog.log(
+            f"ClientError in Submit Tasks {e.response['Error']['Code']} {traceback.format_exc()}"
+        )
+
 
         return {
             'statusCode': 543,
@@ -284,13 +287,9 @@ def lambda_handler(event, context):
         }
 
     except Exception as e:
-        errlog.log("Exception in Submit Tasks {} [{}]"
-                   .format(e, traceback.format_exc()))
+        errlog.log(f"Exception in Submit Tasks {e} [{traceback.format_exc()}]")
 
-        return {
-            'statusCode': 543,
-            'body': "{}".format(e)
-        }
+        return {'statusCode': 543, 'body': f"{e}"}
 
 
 # From 3.7, we can check if UUID is safe (i.e. unique even in case of mutliprocessing)

@@ -142,18 +142,27 @@ class AWSConnector:
             self.__configuration = Configuration(host=self.__api_gateway_endpoint)
 
         self.__scheduler = BackgroundScheduler()
-        logging.info("LAMBDA_ENDPOINT_URL:{}".format(self.__api_gateway_endpoint))
-        logging.info("dynamodb_results_pull_interval_sec:{}".format(self.__dynamodb_results_pull_intervall))
-        logging.info("task_input_passed_via_external_storage:{}".format(self.__task_input_passed_via_external_storage))
-        logging.info("grid_storage_service:{}".format(agent_config_data['grid_storage_service']))
+        logging.info(f"LAMBDA_ENDPOINT_URL:{self.__api_gateway_endpoint}")
+        logging.info(
+            f"dynamodb_results_pull_interval_sec:{self.__dynamodb_results_pull_intervall}"
+        )
+
+        logging.info(
+            f"task_input_passed_via_external_storage:{self.__task_input_passed_via_external_storage}"
+        )
+
+        logging.info(
+            f"grid_storage_service:{agent_config_data['grid_storage_service']}"
+        )
+
         logging.info("AWSConnector Initialized")
-        logging.info("init with {}".format(self.__user_pool_client_id))
-        logging.info("init with {}".format(self.__cognito_client))
+        logging.info(f"init with {self.__user_pool_client_id}")
+        logging.info(f"init with {self.__cognito_client}")
 
     def authenticate(self):
         """This method authenticates against a Cognito User Pool. The JWT is stored as attribute of the class
         """
-        logging.info("authenticate with {}".format(self.__user_pool_client_id))
+        logging.info(f"authenticate with {self.__user_pool_client_id}")
         if not self.__intra_vpc:
             try:
                 aws = WarrantLite(username=self.__username, password=self.__password, pool_id=self.__user_pool_id,
@@ -161,12 +170,12 @@ class AWSConnector:
                 tokens = aws.authenticate_user()
                 self.__user_token_id = tokens["AuthenticationResult"]["IdToken"]
                 self.__user_refresh_token = tokens["AuthenticationResult"]["RefreshToken"]
-                logging.info("authentication successful for user {}".format(self.__user_token_id))
+                logging.info(f"authentication successful for user {self.__user_token_id}")
                 self.__scheduler.add_job(AWSConnector.refresh, 'interval', seconds=TOKEK_REFRESH_INTERVAL_SEC,
                                          args=[self])
                 self.__scheduler.start()
             except Exception as e:
-                logging.error("Cannot authenticate user {}".format(self.__username))
+                logging.error(f"Cannot authenticate user {self.__username}")
                 raise e
             self.__configuration.api_key['htc_cognito_authorizer'] = self.__user_token_id
 
@@ -190,10 +199,10 @@ class AWSConnector:
         if self.__task_input_passed_via_external_storage == 1:
 
             session_id = get_safe_session_id()
-            logging.info("Local session id: {}".format(session_id))
+            logging.info(f"Local session id: {session_id}")
 
             for i, data in enumerate(tasks_list):
-                task_id = session_id + "_" + str(i)
+                task_id = f"{session_id}_{str(i)}"
 
                 data = json.dumps(data).encode('utf-8')
 
@@ -204,36 +213,55 @@ class AWSConnector:
                 # We are no longer passing the actual task definition
                 binary_tasks_list.append(task_id)
 
-        # creation message with tasks_list
-        user_task_json = {
+        return {
             "session_id": session_id,
             "scheduler_data": {
                 "task_timeout_sec": TASK_TIMEOUT_SEC,
                 "retry_count": RETRY_COUNT,
                 "tstamp_api_grid_connector_ms": 0,
-                "tstamp_agent_read_from_sqs_ms": 0
+                "tstamp_agent_read_from_sqs_ms": 0,
             },
             "stats": {
-                "stage1_grid_api_01_task_creation_tstmp": {"label": " ", "tstmp": time_start_ms},
-                "stage1_grid_api_02_task_submission_tstmp": {"label": "upload_data_to_storage",
-                                                             "tstmp": int(round(time.time() * 1000))},
-
-                "stage2_sbmtlmba_01_invocation_tstmp": {"label": "grid_api_2_lambda_ms", "tstmp": 0},
-                "stage2_sbmtlmba_02_before_batch_write_tstmp": {"label": "task_construction_ms", "tstmp": 0},
+                "stage1_grid_api_01_task_creation_tstmp": {
+                    "label": " ",
+                    "tstmp": time_start_ms,
+                },
+                "stage1_grid_api_02_task_submission_tstmp": {
+                    "label": "upload_data_to_storage",
+                    "tstmp": int(round(time.time() * 1000)),
+                },
+                "stage2_sbmtlmba_01_invocation_tstmp": {
+                    "label": "grid_api_2_lambda_ms",
+                    "tstmp": 0,
+                },
+                "stage2_sbmtlmba_02_before_batch_write_tstmp": {
+                    "label": "task_construction_ms",
+                    "tstmp": 0,
+                },
                 # "stage2_sbmtlmba_03_invocation_over_tstmp":    {"label": "dynamo_db_submit_ms", "tstmp" : 0},
-
-                "stage3_agent_01_task_acquired_sqs_tstmp": {"label": "sqs_queuing_time_ms", "tstmp": 0},
-                "stage3_agent_02_task_acquired_ddb_tstmp": {"label": "ddb_task_claiming_time_ms", "tstmp": 0},
-
-                "stage4_agent_01_user_code_finished_tstmp": {"label": "user_code_exec_time_ms", "tstmp": 0},
-                "stage4_agent_02_S3_stdout_delivered_tstmp": {"label": "S3_stdout_upload_time_ms", "tstmp": 0}
+                "stage3_agent_01_task_acquired_sqs_tstmp": {
+                    "label": "sqs_queuing_time_ms",
+                    "tstmp": 0,
+                },
+                "stage3_agent_02_task_acquired_ddb_tstmp": {
+                    "label": "ddb_task_claiming_time_ms",
+                    "tstmp": 0,
+                },
+                "stage4_agent_01_user_code_finished_tstmp": {
+                    "label": "user_code_exec_time_ms",
+                    "tstmp": 0,
+                },
+                "stage4_agent_02_S3_stdout_delivered_tstmp": {
+                    "label": "S3_stdout_upload_time_ms",
+                    "tstmp": 0,
+                },
             },
             "tasks_list": {
-                "tasks": binary_tasks_list if self.__task_input_passed_via_external_storage == 1 else tasks_list
-            }
+                "tasks": binary_tasks_list
+                if self.__task_input_passed_via_external_storage == 1
+                else tasks_list
+            },
         }
-
-        return user_task_json
 
     # TODO implements this method
     def cancel(self, session_id):
@@ -249,7 +277,7 @@ class AWSConnector:
 
     # TODO raise exception when the  task list is above a given threshold
     # TODO create a response object instead of  dictionary
-    def send(self, tasks_list):  # returns TaskID[]
+    def send(self, tasks_list):    # returns TaskID[]
         """This method submits tasks to the HTC grid
 
         Args:
@@ -259,13 +287,13 @@ class AWSConnector:
           dict: the response from the endpoint of the HTC grid
 
         """
-        logging.info("Init send {} tasks".format(len(tasks_list)))
+        logging.info(f"Init send {len(tasks_list)} tasks")
         user_task_json_request = self.generate_user_task_json(tasks_list)
-        logging.info("user_task_json_request: {}".format(user_task_json_request))
+        logging.info(f"user_task_json_request: {user_task_json_request}")
         # print(user_task_json_request)
 
         json_response = self.submit(user_task_json_request)
-        logging.info("json_response = {}".format(json_response))
+        logging.info(f"json_response = {json_response}")
         return json_response
 
     def get_results(self, submission_response: dict, timeout_sec=0):
@@ -283,10 +311,10 @@ class AWSConnector:
         start_time = time.time()
 
         session_tasks_count: int = len(submission_response['task_ids'])
-        logging.info("session_tasks_count: {}".format(session_tasks_count))
+        logging.info(f"session_tasks_count: {session_tasks_count}")
         while True:
             session_results = self.invoke_get_results_lambda({'session_id': submission_response['session_id']})
-            logging.info("session_results: {}".format(session_results))
+            logging.info(f"session_results: {session_results}")
             # print("session_results: {}".format(session_results))
 
             if 'metadata' in session_results \
@@ -304,7 +332,7 @@ class AWSConnector:
 
             output = base64.b64decode(stdout_bytes).decode('utf-8')
 
-            session_results[TASK_STATE_FINISHED + '_OUTPUT'][i] = output
+            session_results[f'{TASK_STATE_FINISHED}_OUTPUT'][i] = output
 
         logging.info("Finish get_results")
         return session_results

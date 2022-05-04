@@ -25,7 +25,9 @@ class MockComputeEngineJobWrapper:
             self.expected_output_string = self.computational_results_dic[worker_arguments[-1]]
         else:
             raise Exception(
-                "Can not verify result as computation is not known for input '{}'".format(self.worker_arguments))
+                f"Can not verify result as computation is not known for input '{self.worker_arguments}'"
+            )
+
 
         return task_definition
 
@@ -33,15 +35,14 @@ class MockComputeEngineJobWrapper:
 
         task_dict = self.form_dict_task_definition()
 
-        tasks = []
-
-        for i in range(0, self.n_tasks_per_job):
-            tasks.append(task_dict)
-
-        return tasks
+        return [task_dict for _ in range(self.n_tasks_per_job)]
 
     def verify_results(self, stdout):
 
         if stdout.rstrip() != self.expected_output_string:
-            return False, "Expected: [{}] != Received [{}]".format(self.expected_output_string, stdout.rstrip())
+            return (
+                False,
+                f"Expected: [{self.expected_output_string}] != Received [{stdout.rstrip()}]",
+            )
+
         return True, ""

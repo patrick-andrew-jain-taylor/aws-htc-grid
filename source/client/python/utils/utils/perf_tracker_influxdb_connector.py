@@ -34,10 +34,7 @@ class PerfTrackerInfluxDBConnector:
         self.samples_buffer = []
 
     def add_sample(self, json_data_sample):
-        fields = {}
-
-        for k, v in json_data_sample.items():
-            fields[k] = v
+        fields = dict(json_data_sample.items())
 
         sample = {
             "measurement": self.measurement,

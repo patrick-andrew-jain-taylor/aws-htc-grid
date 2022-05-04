@@ -51,7 +51,7 @@ logging.getLogger('aws_xray_sdk').setLevel(logging.DEBUG)
 # boto3.set_stream_logger('', logging.DEBUG)
 
 rand_delay = random.randint(5, 15)
-logging.info("SLEEP DELAY {}".format(rand_delay))
+logging.info(f"SLEEP DELAY {rand_delay}")
 time.sleep(rand_delay)
 
 session = boto3.session.Session()
@@ -84,8 +84,6 @@ try:
     SELF_ID = os.environ['MY_POD_NAME']
 except KeyError:
     SELF_ID = "1234"
-    pass
-
 # TODO - retreive the endpoint url from Terraform
 sqs = boto3.resource('sqs', endpoint_url=agent_config_data['sqs_endpoint'], region_name=region)
 # sqs = boto3.resource('sqs', region_name=region)
@@ -178,11 +176,15 @@ def is_task_has_been_cancelled(task_id):
 
     task_row = state_table.get_task_by_id(task_id, consistent_read=True)
 
-    logging.info("is_task_has_been_cancelled: task_id [{}] resp: [{}]".format(task_id, task_row))
+    logging.info(
+        f"is_task_has_been_cancelled: task_id [{task_id}] resp: [{task_row}]"
+    )
 
-    if task_row is not None:
-        if task_row['task_status'].startswith(TASK_STATE_CANCELLED):
-            return True
+
+    if task_row is not None and task_row['task_status'].startswith(
+        TASK_STATE_CANCELLED
+    ):
+        return True
 
     return False
 
@@ -233,7 +235,7 @@ def try_to_acquire_a_task():
             expiration_timestamp=ttl_gen.generate_next_ttl().get_next_expiration_timestamp()
         )
 
-        logging.info("State Table claim_task_for_agent result: {}".format(claim_result))
+        logging.info(f"State Table claim_task_for_agent result: {claim_result}")
 
     except StateTableException as e:
 
@@ -242,18 +244,18 @@ def try_to_acquire_a_task():
             event_counter_pre.increment("agent_failed_to_claim_ddb_task")
 
             if is_task_has_been_cancelled(task["task_id"]):
-                logging.info("Task [{}] has been already cancelled, skipping".format(task['task_id']))
+                logging.info(f"Task [{task['task_id']}] has been already cancelled, skipping")
                 tasks_queue.delete_message(message_handle_id=task["sqs_handle_id"])
-                return None, None
-
             else:
 
                 time.sleep(random.randint(1, 3))
-                return None, None
+            return None, None
 
     except Exception as e:
-        errlog.log("Unexpected error in claim_task_for_agent {} [{}]".format(
-            e, traceback.format_exc()))
+        errlog.log(
+            f"Unexpected error in claim_task_for_agent {e} [{traceback.format_exc()}]"
+        )
+
         raise e
 
     # Message should not re-appear in the queue until task is completed
@@ -347,12 +349,15 @@ def process_subprocess_completion(perf_tracker, task, sqs_msg, fname_stdout, std
     else:
         event_counter_post.increment("ddb_set_task_finished_succeeded")
         logging.info(
-            "We have successfully marked task as completed in dynamodb."
-            " Deleting message from the SQS... for task [{}]".format(
-                task["task_id"]))
+            f'We have successfully marked task as completed in dynamodb. Deleting message from the SQS... for task [{task["task_id"]}]'
+        )
+
         tasks_queue.delete_message(sqs_msg["properties"]["message_handle_id"])
 
-    logging.info("Exec time1: {} {}".format(get_time_now_ms() - AGENT_EXEC_TIMESTAMP_MS, AGENT_EXEC_TIMESTAMP_MS))
+    logging.info(
+        f"Exec time1: {get_time_now_ms() - AGENT_EXEC_TIMESTAMP_MS} {AGENT_EXEC_TIMESTAMP_MS}"
+    )
+
     event_counter_post.increment("agent_total_time_ms", get_time_now_ms() - AGENT_EXEC_TIMESTAMP_MS)
     event_counter_post.set("str_pod_id", SELF_ID)
 
@@ -427,7 +432,7 @@ async def do_task_local_lambda_execution_thread(perf_tracker, task, sqs_msg, tas
     #  logging.info("logs : {}".format(logs))
 
     ret_value = response['Payload'].read().decode('utf-8')
-    logging.info("retValue : {}".format(ret_value))
+    logging.info(f"retValue : {ret_value}")
 
     execution_is_completed_flag = 1
 
@@ -445,64 +450,63 @@ async def do_task_local_lambda_execution_thread(perf_tracker, task, sqs_msg, tas
 def update_ttl_if_required(task, sqs_msg):
     is_refresh_successful = True
 
-    # If this is the first time we are resetting ttl value or
-    # If the next time we will come to this point ttl ticket will expire
-    if ((ttl_gen.get_next_refresh_timestamp() == 0)
-            or (ttl_gen.get_next_refresh_timestamp() < time.time() + work_proc_status_pull_interval_sec)):
-        logging.info("***Updating TTL***")
-        # event_counter_post.increment("counter_update_ttl")
-
-        count = 0
-        while True:
-            count += 1
-            t1 = get_time_now_ms()
-
-            try:
-
-                # Note, if we will timeout on DDB update operation and we have to repeat this loop iteration,
-                # we will regenerate a new TTL ofset, which is what we want.
-                is_refresh_successful = state_table.refresh_ttl_for_ongoing_task(
-                    task_id=task["task_id"],
-                    agent_id=SELF_ID,
-                    new_expirtaion_timestamp=ttl_gen.generate_next_ttl().get_next_expiration_timestamp()
-                )
-
-            except StateTableException as e:
-
-                if e.caused_by_throttling:
-
-                    t2 = get_time_now_ms()
-
-                    errlog.log(f"Agent TTL@StateTable Throttling for #{count} times for {t2 - t1} ms")
-
-                    continue
-                elif e.caused_by_condition and is_task_has_been_cancelled(task["task_id"]):
-                    # The only valid reason why we can be in this code path if the task has been cancelled by the client
-                    # <1.> delete task from task queue so it wont be picked by other workers.
-                    sqs_msg.delete()
-
-                    # <2.> Terminate worker lambda function first
-                    terminate_worker_lambda_container()
-
-                    # <3.> Then terminate/restart the agent container;
-                    logging.warning(f"Task {task['task_id']} has been cancelled during processing, restarting pod.")
-                    os.kill(os.getpid(), signal.SIGKILL)
-
-                    break
-
-                else:
-                    # Unexpected error -> Fail
-                    errlog.log(f"Unexpected StateTableException while refreshing TTL {e} [{traceback.format_exc()}]")
-                    raise Exception(e)
-            except Exception as e:
-                errlog.log(f"Unexpected Exception while refreshing TTL {e} [{traceback.format_exc()}]")
-                raise e
-
-            return is_refresh_successful
-
-    else:
+    if (
+        ttl_gen.get_next_refresh_timestamp() != 0
+        and ttl_gen.get_next_refresh_timestamp()
+        >= time.time() + work_proc_status_pull_interval_sec
+    ):
         # Even if we didn't have to perform an update, return success.
         return True
+    logging.info("***Updating TTL***")
+    # event_counter_post.increment("counter_update_ttl")
+
+    count = 0
+    while True:
+        count += 1
+        t1 = get_time_now_ms()
+
+        try:
+
+            # Note, if we will timeout on DDB update operation and we have to repeat this loop iteration,
+            # we will regenerate a new TTL ofset, which is what we want.
+            is_refresh_successful = state_table.refresh_ttl_for_ongoing_task(
+                task_id=task["task_id"],
+                agent_id=SELF_ID,
+                new_expirtaion_timestamp=ttl_gen.generate_next_ttl().get_next_expiration_timestamp()
+            )
+
+        except StateTableException as e:
+
+            if e.caused_by_throttling:
+
+                t2 = get_time_now_ms()
+
+                errlog.log(f"Agent TTL@StateTable Throttling for #{count} times for {t2 - t1} ms")
+
+                continue
+            elif e.caused_by_condition and is_task_has_been_cancelled(task["task_id"]):
+                # The only valid reason why we can be in this code path if the task has been cancelled by the client
+                # <1.> delete task from task queue so it wont be picked by other workers.
+                sqs_msg.delete()
+
+                # <2.> Terminate worker lambda function first
+                terminate_worker_lambda_container()
+
+                # <3.> Then terminate/restart the agent container;
+                logging.warning(f"Task {task['task_id']} has been cancelled during processing, restarting pod.")
+                os.kill(os.getpid(), signal.SIGKILL)
+
+                break
+
+            else:
+                # Unexpected error -> Fail
+                errlog.log(f"Unexpected StateTableException while refreshing TTL {e} [{traceback.format_exc()}]")
+                raise Exception(e)
+        except Exception as e:
+            errlog.log(f"Unexpected Exception while refreshing TTL {e} [{traceback.format_exc()}]")
+            raise e
+
+        return is_refresh_successful
 
 
 async def do_ttl_updates_thread(task, sqs_msg):
@@ -541,7 +545,7 @@ def prepare_arguments_for_execution(task):
 async def run_task(task, sqs_msg):
     global execution_is_completed_flag
     xray_recorder.begin_segment('run_task')
-    logging.info("Running Task: {}".format(task))
+    logging.info(f"Running Task: {task}")
     xray_recorder.begin_subsegment('encoding')
     bin_protobuf = prepare_arguments_for_execution(task)
     tast_str = bin_protobuf.decode("utf-8")
@@ -553,27 +557,25 @@ async def run_task(task, sqs_msg):
     fname_stdout = "./stdout-{task_id}.log".format(task_id=task_id)
     fname_stderr = "./stderr-{task_id}.log".format(task_id=task_id)
     f_stdout = open(fname_stdout, "w")
-    f_stderr = open(fname_stderr, "w")
+    with open(fname_stderr, "w") as f_stderr:
+        xray_recorder.end_subsegment()
+        execution_is_completed_flag = 0
 
-    xray_recorder.end_subsegment()
-    execution_is_completed_flag = 0
+        task_execution = asyncio.create_task(
+            do_task_local_lambda_execution_thread(perf_tracker_post, task, sqs_msg, task_def)
+        )
 
-    task_execution = asyncio.create_task(
-        do_task_local_lambda_execution_thread(perf_tracker_post, task, sqs_msg, task_def)
-    )
-
-    task_ttl_update = asyncio.create_task(do_ttl_updates_thread(task, sqs_msg))
-    await asyncio.gather(task_execution, task_ttl_update)
-    f_stdout.close()
-    f_stderr.close()
+        task_ttl_update = asyncio.create_task(do_ttl_updates_thread(task, sqs_msg))
+        await asyncio.gather(task_execution, task_ttl_update)
+        f_stdout.close()
     xray_recorder.end_segment()
-    logging.info("Finished Task: {}".format(task))
+    logging.info(f"Finished Task: {task}")
     return True
 
 
 def terminate_worker_lambda_container():
     for proc in psutil.process_iter():
-        logging.info("running process : {}".format(proc.name()))
+        logging.info(f"running process : {proc.name()}")
         # check whether the process name matches
         if proc.name() == 'aws-lambda-rie':
             logging.info("stop lambda emulated environment after the last request")
@@ -592,9 +594,10 @@ def event_loop():
             logging.info("Back to main loop")
         else:
             timeout = random.uniform(empty_task_queue_backoff_timeout_sec, 2 * empty_task_queue_backoff_timeout_sec)
-            logging.info("Could not acquire a task from the queue, backing off for {}".
-                         format(timeout)
-                         )
+            logging.info(
+                f"Could not acquire a task from the queue, backing off for {timeout}"
+            )
+
             time.sleep(timeout)
 
     terminate_worker_lambda_container()
@@ -622,11 +625,15 @@ if __name__ == "__main__":
         event_loop()
 
     except ClientError as e:
-        errlog.log("ClientError Agent Event Loop {} [{}] POD:{}".
-                   format(e.response['Error']['Code'], traceback.format_exc(), SELF_ID))
+        errlog.log(
+            f"ClientError Agent Event Loop {e.response['Error']['Code']} [{traceback.format_exc()}] POD:{SELF_ID}"
+        )
+
         sys.exit(1)
 
     except Exception as e:
-        errlog.log("Exception Agent Event Loop {} [{}] POD:{}".
-                   format(e, traceback.format_exc(), SELF_ID))
+        errlog.log(
+            f"Exception Agent Event Loop {e} [{traceback.format_exc()}] POD:{SELF_ID}"
+        )
+
         sys.exit(1)

@@ -24,8 +24,7 @@ def construct_date(date_string):
     assert date_tokens[1] <= 12
     assert date_tokens[2] > 0
 
-    ql_date = ql.Date(date_tokens[0], date_tokens[1], date_tokens[2])
-    return ql_date
+    return ql.Date(date_tokens[0], date_tokens[1], date_tokens[2])
 
 
 def init_heston_model(option_dict, riskFreeRate, dividendYield, underlying):
@@ -51,8 +50,6 @@ def init_heston_model(option_dict, riskFreeRate, dividendYield, underlying):
             0.0001,
             0.0,
         )
-        hestonModel = ql.HestonModel(hestonProcess)
-
-        return hestonModel
+        return ql.HestonModel(hestonProcess)
     else:
         return None

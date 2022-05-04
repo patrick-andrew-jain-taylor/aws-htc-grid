@@ -52,7 +52,10 @@ def get_tasks_statuses_in_session(session_id):
     finished_tasks = finished_tasks_resp["Items"]
     if len(finished_tasks) > 0:
         response[TASK_STATE_FINISHED] = [x["task_id"] for x in finished_tasks]
-        response[TASK_STATE_FINISHED + '_OUTPUT'] = ["read_from_dataplane" for x in finished_tasks]
+        response[f'{TASK_STATE_FINISHED}_OUTPUT'] = [
+            "read_from_dataplane" for _ in finished_tasks
+        ]
+
 
     # <2.> Process cancelled Tasks
     cancelled_tasks_resp = state_table.get_tasks_by_state(session_id, TASK_STATE_CANCELLED)
@@ -60,7 +63,10 @@ def get_tasks_statuses_in_session(session_id):
     cancelled_tasks = cancelled_tasks_resp["Items"]
     if len(cancelled_tasks) > 0:
         response[TASK_STATE_CANCELLED] = [x["task_id"] for x in cancelled_tasks]
-        response[TASK_STATE_CANCELLED + '_OUTPUT'] = ["read_from_dataplane" for x in cancelled_tasks]
+        response[f'{TASK_STATE_CANCELLED}_OUTPUT'] = [
+            "read_from_dataplane" for _ in cancelled_tasks
+        ]
+
 
     # <3.> Process failed Tasks
     failed_tasks_resp = state_table.get_tasks_by_state(session_id, TASK_STATE_FAILED)
@@ -68,7 +74,10 @@ def get_tasks_statuses_in_session(session_id):
     failed_tasks = failed_tasks_resp["Items"]
     if len(failed_tasks) > 0:
         response[TASK_STATE_FAILED] = [x["task_id"] for x in failed_tasks]
-        response[TASK_STATE_FAILED + '_OUTPUT'] = ["read_from_dataplane" for x in failed_tasks]
+        response[f'{TASK_STATE_FAILED}_OUTPUT'] = [
+            "read_from_dataplane" for _ in failed_tasks
+        ]
+
 
     # <4.> Process metadata
     response["metadata"] = {
@@ -142,15 +151,14 @@ def lambda_handler(event, context):
         }
 
     except ClientError as e:
-        errlog.log('Lambda get_result error: {} trace: {}'.format(
-            e.response['Error']['Message'], traceback.format_exc()))
+        errlog.log(
+            f"Lambda get_result error: {e.response['Error']['Message']} trace: {traceback.format_exc()}"
+        )
+
         return {
             'statusCode': 542,
             'body': e.response['Error']['Message']
         }
     except Exception as e:
-        errlog.log('Lambda get_result error: {} trace: {}'.format(e, traceback.format_exc()))
-        return {
-            'statusCode': 542,
-            'body': "{}".format(e)
-        }
+        errlog.log(f'Lambda get_result error: {e} trace: {traceback.format_exc()}')
+        return {'statusCode': 542, 'body': f"{e}"}

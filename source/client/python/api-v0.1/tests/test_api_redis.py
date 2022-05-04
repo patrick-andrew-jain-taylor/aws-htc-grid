@@ -30,8 +30,7 @@ def mock_cognitoidp_client():
         object: the mocked connection
     """
     with mock_cognitoidp():
-        conn = boto3.client("cognito-idp", region_name="eu-west-1")
-        yield conn
+        yield boto3.client("cognito-idp", region_name="eu-west-1")
 
 
 @pytest.fixture
@@ -91,18 +90,22 @@ def mocked_responses_get():
     """
     with urllib3_mock.Responses() as rsps:
         rsps.add(
-            responses.GET, "/result",
-            body=json.dumps({
-                "metadata": {
-                    "tasks_in_response": 2
-                },
-                TASK_STATE_FINISHED: ["test1", "test2"],
-                TASK_STATE_FINISHED + '_OUTPUT': [
-                    "NoResult1",
-                    "NoResult2"
-                ]
-            }), status=200,
-            content_type='application/json')
+            responses.GET,
+            "/result",
+            body=json.dumps(
+                {
+                    "metadata": {"tasks_in_response": 2},
+                    TASK_STATE_FINISHED: ["test1", "test2"],
+                    f'{TASK_STATE_FINISHED}_OUTPUT': [
+                        "NoResult1",
+                        "NoResult2",
+                    ],
+                }
+            ),
+            status=200,
+            content_type='application/json',
+        )
+
         yield rsps
 
 

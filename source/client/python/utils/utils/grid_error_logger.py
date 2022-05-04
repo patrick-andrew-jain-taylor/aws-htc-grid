@@ -60,4 +60,4 @@ def log(message,
                 sequenceToken=seq
             )
     except Exception as e:
-        print("Cannot log errors because {}".format(e), file=sys.stderr)
+        print(f"Cannot log errors because {e}", file=sys.stderr)
