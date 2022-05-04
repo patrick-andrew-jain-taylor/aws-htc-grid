@@ -12,11 +12,5 @@ def state_table_manager(state_table_service, state_table_config, tasks_state_tab
     if state_table_service == "DynamoDB":
         return StateTableDDB(state_table_config, tasks_state_table_name, region)
 
-    elif state_table_service == "MongoDB":
-        raise NotImplementedError()
-
-    elif state_table_service == "CouchDB":
-        raise NotImplementedError()
-
     else:
         raise NotImplementedError()

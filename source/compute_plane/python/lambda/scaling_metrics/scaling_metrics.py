@@ -28,7 +28,7 @@ def lambda_handler(event, context):
         region=region)
 
     task_pending = task_queue.get_queue_length()
-    logging.info("Scaling Metrics: pending task in DDB = {}".format(task_pending))
+    logging.info(f"Scaling Metrics: pending task in DDB = {task_pending}")
     # Create CloudWatch client
     cloudwatch = boto3.client('cloudwatch')
     period = int(os.environ["PERIOD"])

@@ -35,11 +35,11 @@ def submit_tasks_batch(
     except:
         agent_config_file = "/etc/agent/Agent_config.tfvars.json"
 
-    logging.info("Agent config file:{}".format(agent_config_file))
+    logging.info(f"Agent config file:{agent_config_file}")
     with open(agent_config_file, 'r') as file:
         agent_config_data = json.loads(file.read())
 
-    logging.info("Batch mode {}".format(thread_id))
+    logging.info(f"Batch mode {thread_id}")
     adapter = AWSConnector()
     try:
         username = os.environ['USERNAME']
@@ -57,13 +57,14 @@ def submit_tasks_batch(
 
     time.sleep(random.uniform(0, 2.0 * thread_id))
 
-    for J in range(0, n_jobs_per_thread):
+    results_ok = True
+    for J in range(n_jobs_per_thread):
 
         saved_submission_responses = []
         batch_of_jobs = []
 
         # <1.> Generate a batch of jobs, i.e., list of lists of tasks
-        for B in range(0, job_batch_size):
+        for _ in range(job_batch_size):
             # Generate a vector of tasks that forms a single job
             bin_job = jw.generate_binary_job()
 
@@ -73,7 +74,7 @@ def submit_tasks_batch(
 
         # <2.> For every Job in the Batch send vector of tasks, remember session ids for each job
         for i, job in enumerate(batch_of_jobs):
-            logging.info("len {}".format(batch_of_jobs))
+            logging.info(f"len {batch_of_jobs}")
             retries = 0
             while True:
 
@@ -92,42 +93,39 @@ def submit_tasks_batch(
                         continue
                 break
 
-            print("[Jobid:{},thrdid:{},batchid:{}] Submitted session [{}] ".format(
-                J, thread_id, i, submission_resp["session_id"])
+            print(
+                f'[Jobid:{J},thrdid:{thread_id},batchid:{i}] Submitted session [{submission_resp["session_id"]}] '
             )
+
             saved_submission_responses.append(submission_resp)
 
         # <3.> Reiterate over session ids and attempt to retrieve all results.
         for task_index, sub_respo in enumerate(saved_submission_responses):
-            print("[iter:{},tid:{}] Waiting for session {}/{}  [{}]...".format(
-                J, thread_id,
-                task_index + 1, len(saved_submission_responses),
-                sub_respo["session_id"]
-            ), end='', flush=True)
+            print(
+                f'[iter:{J},tid:{thread_id}] Waiting for session {task_index + 1}/{len(saved_submission_responses)}  [{sub_respo["session_id"]}]...',
+                end='',
+                flush=True,
+            )
+
 
             submission_results = adapter.get_results(
                 sub_respo, timeout_sec=60000)
 
-            results_ok = True
             msg = ""
-            for i, stdout in enumerate(submission_results['finished_OUTPUT']):
-
+            for stdout in submission_results['finished_OUTPUT']:
                 verification_res, msg = jw.verify_results(stdout)
                 if not verification_res:
-                    print("[iter:{},tid:{}] Failed on result verification for session [{}] msg: {}".format(
-                        J, thread_id, sub_respo["session_id"], msg
-                    ))
+                    print(
+                        f'[iter:{J},tid:{thread_id}] Failed on result verification for session [{sub_respo["session_id"]}] msg: {msg}'
+                    )
+
 
                     sys.exit(1)
 
                 if (do_print):
                     print(stdout.rstrip())
 
-                # out_file = "./results/{}.{}.{}.out".format(file_name, submission_resp["session_id"], i)
-                # with open(out_file, "wb") as f:
-                #     f.write(stdout)
-
-            msg = msg + "x{}".format(len(submission_results['finished_OUTPUT']))
+            msg = msg + f"x{len(submission_results['finished_OUTPUT'])}"
             time_end_ms = int(round(time.time() * 1000))
             print("{} \nTime from start: {:.2f} sec".format(
                 msg, (time_end_ms - time_start_ms) / 1000.0))
@@ -140,7 +138,7 @@ def multiprocessing_execute_py(
         job_size, job_batch_size,
         worker_arguments, generate_payload_options, do_print):
     procs = []
-    for thread_index in range(0, n_threads):
+    for thread_index in range(n_threads):
         p = Process(target=submit_tasks_batch, args=(
             n_jobs_per_thread,
             job_size, job_batch_size,
@@ -152,12 +150,12 @@ def multiprocessing_execute_py(
         procs.append(p)
 
     for p in procs:
-        logging.info("Wainting on {}".format(p))
+        logging.info(f"Wainting on {p}")
         p.join()
 
     for p in procs:
         if p.exitcode is not 0:
-            logging.error("One process did not exit successfully {}".format(p.exitcode()))
+            logging.error(f"One process did not exit successfully {p.exitcode()}")
             raise Exception("Exit code not null")
 
 
@@ -217,11 +215,11 @@ if __name__ == "__main__":
 
     logging.getLogger().setLevel(logging.WARNING)
     FLAGS = get_construction_arguments().parse_args()
-    logging.warning("Loggging status {}".format(FLAGS.log))
+    logging.warning(f"Loggging status {FLAGS.log}")
     if FLAGS.log:
         numeric_level = getattr(logging, FLAGS.log.upper(), None)
         if not isinstance(numeric_level, int):
-            raise ValueError('Invalid log level: %s' % FLAGS.log)
+            raise ValueError(f'Invalid log level: {FLAGS.log}')
         logging.getLogger().setLevel(numeric_level)
 
     if FLAGS.worker_type == "mock_compute_engine":
@@ -236,7 +234,10 @@ if __name__ == "__main__":
 
                                                                           FLAGS.do_print), number=1)
         nb_jobs_processed = FLAGS.job_size * FLAGS.njobs * FLAGS.job_batch_size
-        logging.warning("Execution times in second = {}".format(execution_time))
-        logging.warning("Observed Throuput (job/second) = {}".format(execution_time / nb_jobs_processed))
+        logging.warning(f"Execution times in second = {execution_time}")
+        logging.warning(
+            f"Observed Throuput (job/second) = {execution_time / nb_jobs_processed}"
+        )
+
 
     logging.warning("All threads completed. All results are verified!")

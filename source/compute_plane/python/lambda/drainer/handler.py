@@ -90,13 +90,12 @@ def get_bearer_token(cluster, region):
 
     params = {
         'method': 'GET',
-        'url': 'https://sts.{}.amazonaws.com/?Action=GetCallerIdentity&Version=2011-06-15'.format(region),
+        'url': f'https://sts.{region}.amazonaws.com/?Action=GetCallerIdentity&Version=2011-06-15',
         'body': {},
-        'headers': {
-            'x-k8s-aws-id': cluster
-        },
-        'context': {}
+        'headers': {'x-k8s-aws-id': cluster},
+        'context': {},
     }
+
 
     signed_url = signer.generate_presigned_url(
         params,
@@ -128,11 +127,11 @@ def _lambda_handler(env, k8s_config, k8s_client, event):
     auto_scaling_group_name = event['detail']['AutoScalingGroupName']
 
     instance_id = event['detail']['EC2InstanceId']
-    logger.info('Instance ID: ' + instance_id)
+    logger.info(f'Instance ID: {instance_id}')
     instance = ec2.describe_instances(InstanceIds=[instance_id])['Reservations'][0]['Instances'][0]
 
     node_name = instance['PrivateDnsName']
-    logger.info('Node name: ' + node_name)
+    logger.info(f'Node name: {node_name}')
 
     # Configure
     k8s_config.load_kube_config(KUBE_FILEPATH)
@@ -162,7 +161,10 @@ def _lambda_handler(env, k8s_config, k8s_client, event):
         print("lifecycling hooks over")
         logger.info("lifecycling hooks over")
     except ApiException:
-        logger.exception('There was an error removing the pods from the node {}'.format(node_name))
+        logger.exception(
+            f'There was an error removing the pods from the node {node_name}'
+        )
+
         abandon_lifecycle_action(asg, auto_scaling_group_name, lifecycle_hook_name, instance_id)
 
 

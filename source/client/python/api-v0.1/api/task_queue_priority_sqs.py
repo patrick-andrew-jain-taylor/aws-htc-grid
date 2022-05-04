@@ -33,12 +33,12 @@ class QueuePrioritySQS:
         self.msg_handle_to_queue_lookup = {}
         self.priority_to_queue_lookup = {}
 
-        self.priorities = [x for x in range(0, self.priorities_count)]
+        self.priorities = list(range(self.priorities_count))
 
         for priority in self.priorities:
             # Expected format htc_task_queue-<TAG>__<QUEUE PRIORITY>
             # e.g., htc_task_queue-kbgcncl__1
-            queue_name = first_queue_name.split("__")[0] + "__{}".format(priority)
+            queue_name = first_queue_name.split("__")[0] + f"__{priority}"
 
             self.priority_to_queue_lookup[priority] = QueueSQS(endpoint_url, queue_name, region)
 
@@ -120,9 +120,7 @@ class QueuePrioritySQS:
 
             queue = self.__get_queue_object(message_handle_id, task_priority)
 
-            res = queue.delete_message(message_handle_id)
-
-            return res
+            return queue.delete_message(message_handle_id)
 
         except Exception as e:
 
@@ -145,9 +143,7 @@ class QueuePrioritySQS:
 
             queue = self.__get_queue_object(message_handle_id, task_priority)
 
-            res = queue.change_visibility(message_handle_id, visibility_timeout_sec)
-
-            return res
+            return queue.change_visibility(message_handle_id, visibility_timeout_sec)
 
         except Exception as e:
             msg = f"PrioritySQS: Failed to change visibility by message_handle_id [{message_handle_id}] priority [{task_priority}] : [{e}] [{traceback.format_exc()}]"
@@ -160,11 +156,10 @@ class QueuePrioritySQS:
 
         """
 
-        all_queued_tasks = sum(
-            self.priority_to_queue_lookup[p].get_queue_length() for p in self.priorities
+        return sum(
+            self.priority_to_queue_lookup[p].get_queue_length()
+            for p in self.priorities
         )
-
-        return all_queued_tasks
 
     def __get_queue_object(self, message_handle_id, task_priority=None) -> QueueSQS:
         """This function finds a corresponding queue by message_handle_id or task_priority

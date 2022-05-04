@@ -27,12 +27,7 @@ class PortfolioGenerator:
 
     def __init__(self, config=None):
 
-        if config is None:
-            self.config = {
-                "portfolio_target_size": 1
-            }
-        else:
-            self.config = config
+        self.config = {"portfolio_target_size": 1} if config is None else config
 
         with open('sample_portfolio.json') as json_file:
             self.seed_portfolio = json.load(json_file)
@@ -43,7 +38,7 @@ class PortfolioGenerator:
 
         seed_range = len(self.seed_portfolio["portfolio"])
 
-        for i in range(0, self.config["portfolio_target_size"]):
+        for _ in range(self.config["portfolio_target_size"]):
             index = random.randint(0, seed_range - 1)
 
             portfolio.append(self.seed_portfolio["portfolio"][index])

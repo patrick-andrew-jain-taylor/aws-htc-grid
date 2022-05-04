@@ -16,22 +16,24 @@ def get_time_now_ms():
 # TODO: remove dependencies on influxdb
 def performance_tracker_initializer(metrics_are_enabled, connection_string, influxdb_ip):
     metrics_are_enabled = bool(int(metrics_are_enabled))
-    if metrics_are_enabled:
-        tokens = connection_string.split(" ", 1)  # Pick up first word in the string
-        connector_type = tokens[0]
-        if connector_type == "firehose":
-            firehost_connector = PerfTrackerFirehoseConnector(connector_string=tokens[1])
-            perf_tracker = PerformanceTracker(firehost_connector)
-            return perf_tracker
-        if connector_type == "influxdb":
-            influxdb_connector = PerfTrackerInfluxDBConnector(connector_string=tokens[1], influxdb_ip=influxdb_ip)
-            perf_tracker = PerformanceTracker(influxdb_connector)
-            return perf_tracker
-        else:
-            print("ERROR Undefined metrics connector type, no metrics will be collected: {}".format(connector_type))
-            return __create_empty_performance_tracker
-    else:
+    if not metrics_are_enabled:
         return __create_empty_performance_tracker()
+    tokens = connection_string.split(" ", 1)  # Pick up first word in the string
+    connector_type = tokens[0]
+    if connector_type == "firehose":
+        firehost_connector = PerfTrackerFirehoseConnector(connector_string=tokens[1])
+        perf_tracker = PerformanceTracker(firehost_connector)
+        return perf_tracker
+    if connector_type == "influxdb":
+        influxdb_connector = PerfTrackerInfluxDBConnector(connector_string=tokens[1], influxdb_ip=influxdb_ip)
+        perf_tracker = PerformanceTracker(influxdb_connector)
+        return perf_tracker
+    else:
+        print(
+            f"ERROR Undefined metrics connector type, no metrics will be collected: {connector_type}"
+        )
+
+        return __create_empty_performance_tracker
 
 
 def __create_empty_performance_tracker():
@@ -70,10 +72,7 @@ class EventsCounter:
         self.evcounter = {}
 
         for e in self.expected_events:
-            if e.startswith("str"):
-                self.evcounter[e] = ""
-            else:
-                self.evcounter[e] = 0
+            self.evcounter[e] = "" if e.startswith("str") else 0
 
 
 class PerformanceTracker:
@@ -125,9 +124,12 @@ class PerformanceTracker:
 
     def submit_measurements(self):
 
-        if self.buffered_storage_connector:
-            if self.max_batching_delay_ms < get_time_now_ms() - self.last_batch_submission_timestamp_ms:
-                time_start_ms = get_time_now_ms()
-                self.buffered_storage_connector.submit_measurements()
-                self.last_batch_submission_delay_ms = get_time_now_ms() - time_start_ms
-                self.last_batch_submission_timestamp_ms = get_time_now_ms()
+        if (
+            self.buffered_storage_connector
+            and self.max_batching_delay_ms
+            < get_time_now_ms() - self.last_batch_submission_timestamp_ms
+        ):
+            time_start_ms = get_time_now_ms()
+            self.buffered_storage_connector.submit_measurements()
+            self.last_batch_submission_delay_ms = get_time_now_ms() - time_start_ms
+            self.last_batch_submission_timestamp_ms = get_time_now_ms()

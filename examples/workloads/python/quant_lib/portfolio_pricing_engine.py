@@ -19,7 +19,10 @@ def evaluate_option(option):
         elif option["exercise"] == "American":
             return evaluate_american_option(option)
         else:
-            raise Exception("Can not evaluate, exercise type is not supported: {}".format(option["exercise"]))
+            raise Exception(
+                f'Can not evaluate, exercise type is not supported: {option["exercise"]}'
+            )
+
 
     except Exception as e:
         return f"Error in processing option [{option}] error: [{e}] trace: [{traceback.format_exc()}]"

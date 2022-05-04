@@ -107,7 +107,7 @@ class InOutRedis:
 
     def __get_full_key(self, key, postfix):
         if self.subnamespace is not None:
-            return str(self.subnamespace) + '/' + str(key) + str(postfix)
+            return f'{str(self.subnamespace)}/{str(key)}{str(postfix)}'
         else:
             return str(key) + str(postfix)
 
@@ -122,11 +122,8 @@ class InOutRedis:
                     Filename=file_name, Key=self.__get_full_key(task_id, postfix)
                 )
 
-            in_file = open(file_name, "rb")
-
-            file_content = in_file.read()
-
-            in_file.close()
+            with open(file_name, "rb") as in_file:
+                file_content = in_file.read()
 
             self.redis_cache.set(self.__get_full_key(task_id, postfix), file_content)
 
@@ -152,25 +149,22 @@ class InOutRedis:
     def __get_to_bytes(self, task_id, postfix):
         try:
             content = self.redis_cache.get(self.__get_full_key(task_id, postfix))
-            if content is None:
-                # cache miss
-                print('Cache miss for ' + task_id)
-
-                if self.bucket:
-
-                    with (io.BytesIO()) as f_data:
-                        self.bucket.download_fileobj(Key=self.__get_full_key(task_id, postfix), Fileobj=f_data)
-                        data = f_data.getvalue()
-
-                    if not data:
-                        raise Exception("Can not retrieve from S3 {} ".format(task_id))
-
-                    self.redis_cache.set(self.__get_full_key(task_id, postfix), data)
-                    return data
-                else:
-                    raise Exception("Cache miss for {}".format(task_id))
-            else:
+            if content is not None:
                 return content
+                # cache miss
+            print(f'Cache miss for {task_id}')
+
+            if not self.bucket:
+                raise Exception(f"Cache miss for {task_id}")
+            with (io.BytesIO()) as f_data:
+                self.bucket.download_fileobj(Key=self.__get_full_key(task_id, postfix), Fileobj=f_data)
+                data = f_data.getvalue()
+
+            if not data:
+                raise Exception(f"Can not retrieve from S3 {task_id} ")
+
+            self.redis_cache.set(self.__get_full_key(task_id, postfix), data)
+            return data
         except Exception as e:
             print(e)
             raise e
@@ -179,29 +173,24 @@ class InOutRedis:
         try:
 
             content = self.redis_cache.get(self.__get_full_key(task_id, postfix))
-            if content is None:
-
-                # cache miss
-                print('Cache miss for ' + task_id)
-
-                if self.bucket:
-
-                    with (io.BytesIO()) as f_data:
-                        self.bucket.download_fileobj(Key=self.__get_full_key(task_id, postfix), Fileobj=f_data)
-                        data = f_data.getvalue()
-
-                    if not data:
-                        raise Exception("Can not retrieve from S3 {} ".format(task_id))
-
-                    self.redis_cache.set(self.__get_full_key(task_id, postfix), data)
-
-                    return data.decode('utf-8')
-                else:
-                    raise Exception("Cache miss for {}".format(task_id))
-
-            else:
-
+            if content is not None:
                 return content.decode('utf-8')
+                # cache miss
+            print(f'Cache miss for {task_id}')
+
+            if not self.bucket:
+                raise Exception(f"Cache miss for {task_id}")
+
+            with (io.BytesIO()) as f_data:
+                self.bucket.download_fileobj(Key=self.__get_full_key(task_id, postfix), Fileobj=f_data)
+                data = f_data.getvalue()
+
+            if not data:
+                raise Exception(f"Can not retrieve from S3 {task_id} ")
+
+            self.redis_cache.set(self.__get_full_key(task_id, postfix), data)
+
+            return data.decode('utf-8')
         except Exception as e:
             print(e)
             raise e
